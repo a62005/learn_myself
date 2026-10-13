@@ -8,62 +8,167 @@
 
 ## Day 1: Swift 與 Kotlin 基礎語法映射與空安全（Optionals）
 
-### 1. 核心觀念深入解析（Android vs iOS 對照）
+### 1. 核心觀念深入解析（7 年 Android 視角的語意對照）
 
-身為 7 年 Android 資深工程師，在轉換到 Swift 時，首要任務是掌握型別推導與空安全機制的語意差異：
+身為資深 Android 工程師，你已經熟悉 Kotlin 的型別推導與空安全機制。學習 Swift 時，最關鍵的是理解兩者在編譯期檢查與解包作用域上的設計哲學差異。
 
 #### (1) 常數與變數
-* Kotlin：`val`（唯讀）、`var`（可變）。
-* Swift：`let`（唯讀）、`var`（可變）。
-* **關鍵規則**：Swift 編譯器會嚴格檢查未曾被修改的變數，強制建議宣告為 `let`。在 Swift 工程中，預設一律先用 `let`。
+* **Kotlin**：`val`（唯讀變數）、`var`（可變變數）。
+* **Swift**：`let`（唯讀常數）、`var`（可變變數）。
+* **編譯器哲學**：Swift 編譯器對未修改的 `var` 非常敏感，若變數後續未發生變更，Xcode 會強制跳出 Warning 建議改為 `let`。在 Swift 實務中，**預設一律先宣告為 `let`，直到確定需要改變時才改為 `var`**。
 
 #### (2) 空安全心智模型（Optionals）
-Swift 的 `Optional` 本質是列舉 `enum Optional<Wrapped> { case none, case some(Wrapped) }`。
-對比 Kotlin 習慣的 `?.`、`?:` 與 `let`，Swift 最關鍵的核心是「提早退出（Early Exit）」：
+Swift 的 `Optional` 在底層是一個帶泛型的列舉：
+```swift
+enum Optional<Wrapped> {
+    case none
+    case some(Wrapped)
+}
+```
+
+在 Kotlin 中，你習慣依賴 Smart Cast（例如 `if (str != null) str.length`）或 Scope Function `str?.let { ... }`。  
+而在 Swift 中，解包有明確的作用域邊界與工程規範：
+
+##### ① `guard let`（Swift 最推崇的「提早退出 Early Exit」哲學）
+這是 Swift 最具特色的語言特性之一。當前置條件不成立時，強制在 `else` 區塊內離開目前作用域（`return`、`throw` 或 `break`）。**通過驗證後的變數，在整個函式後續的所有程式碼中直接保證為「非空型別」，不需巢狀縮排**：
 
 ```swift
-// 1. guard let：提早返回（Early Exit，Swift 最推崇的工程規範）
-func processUserProfile(id: Int?, username: String?) {
-    // 條件若不滿足，必須在 else 中 return 或 throw
+func displayUserProfile(id: Int?, username: String?) {
+    // 同時解包多個可空值，並能直接串接布林條件驗證！
     guard let id = id, id > 0,
-          let username = username, !username.isEmpty else {
-        print("❌ 驗證失敗：無效的使用者資料")
+          let username = username, !username.trimmingCharacters(in: .whitespaces).isEmpty else {
+        print("❌ 驗證失敗：無效的使用者 ID 或名稱")
         return
     }
     
-    // 通過驗證後，id 與 username 在後續作用域中直接作為非空型別使用
+    // 從這裡開始，id 是 Int，username 是 String（非 Optional）
     print("✅ 使用者 [\(id)]: \(username)")
 }
-
-// 2. if let：局部作用域安全解包（對照 Kotlin 的 ?.let { }）
-if let email = user.email {
-    sendNotification(to: email)
-}
-
-// 3. 空合併運算子（對標 Kotlin Elvis 運算子 ?:）
-let displayName = user.nickname ?? user.username ?? "訪客"
 ```
 
-> ⚠️ **踩坑提醒**：
-> * 切忌在生產代碼濫用強制解包 `!`（對標 Kotlin `!!`），為 nil 時會觸發 Fatal Error。
-> * Swift 字串插值語法為 `"ID: \(id)"`，而非 Kotlin 的 `"$id"` 或 `"${user.id}"`。
+##### ② `if let`（局部作用域解包）
+對應 Kotlin 的 `obj?.let { value -> ... }`。解包後的變數只在 `if` 區塊的大括號內有效：
+```swift
+let email: String? = "user@example.com"
+
+if let validEmail = email {
+    sendNotification(to: validEmail) // 僅在此區塊內 validEmail 為 String
+}
+```
+
+##### ③ 空合併運算子 `??`（對標 Kotlin Elvis 運算子 `?:`）
+```swift
+let nickname: String? = nil
+let username: String? = "Alex"
+// 若 nickname 為 nil 則看 username，皆為 nil 則給預設值
+let displayName = nickname ?? username ?? "訪客"
+```
+
+##### ④ 可選鏈（Optional Chaining `?.`）
+與 Kotlin 一致，若中間鏈結任一節點為 `nil`，整個表達式立即短路返回 `nil`：
+```swift
+let streetName = user?.address?.street?.name
+```
+
+> ⚠️ **Android 工程師常見踩坑點**：
+> 1. **強制解包 `!`（對標 Kotlin `!!`）**：例如 `user!.name`。若值為 `nil`，執行期直接崩潰（Fatal Error）。除極少數架構初始化場景外，嚴格禁止在業務代碼中使用。
+> 2. **字串插值（String Interpolation）**：Kotlin 使用 `"$id ${user.name}"`；Swift 使用 `"\(id) \(user.name)"`，反斜線括號內可放置任意運算式。
 
 ---
 
-### 2. 每日實作任務（1~2 小時）
+### 2. 今日實作練習題（直接在 VS Code 或 [SwiftFiddle](https://swiftfiddle.com/) 練習）
 
-1. 在 VS Code 中建立並開啟 `Day01_Syntax.swift`。
-2. 實作通用資料解析函式 `parseResponseData`：
-   * 定義包含可空欄位（`id: Int?`, `name: String?`, `tags: [String]?`, `bio: String?`）的資料結構。
-   * 使用 `guard let` 組合驗證（ID 大於 0 且名稱非空）。
-   * 使用 `??` 取得預設標籤與預設簡介。
-3. 在 [SwiftFiddle](https://swiftfiddle.com/) 或本地環境驗證輸出結果。
+以下提供完整的通用工程練習題目與測試案例。你可以將下方代碼複製到你的練習環境，完成其中的 4 個任務：
+
+```swift
+import Foundation
+
+// MARK: - 模擬情境：解析後端回傳的使用者個人資料（所有欄位皆可能為 nil）
+struct RawUserResponse {
+    let id: Int?
+    let username: String?
+    let email: String?
+    let roles: [String]?
+    let bio: String?
+}
+
+// MARK: - 請完成此資料解析函式
+func processUserProfile(response: RawUserResponse) {
+    // 【任務 1：使用 guard let 做嚴格前置驗證（Early Exit）】
+    // 規則：id 必須非空且 > 0；username 必須非空且去除空白後不為空字串。
+    // 條件若不符，印出 "❌ 驗證失敗：無效的使用者 ID 或名稱" 並直接 return。
+    
+    
+    // 【任務 2：使用 ?? 空合併運算子取得主角色】
+    // 規則：取 roles 的第一個元素，若 roles 為 nil 或為空陣列，預設角色為 "Guest"。
+    
+    
+    // 【任務 3：使用 if let 或空合併處理可選資訊】
+    // 規則：email 若有值則使用，若為 nil 則顯示 "未提供 Email"；
+    //       bio 若有值則使用，若為 nil 則顯示 "尚未填寫個人簡介"。
+    
+    
+    // 【任務 4：使用字串插值 \( ) 印出格式化名片】
+    // 預期輸出格式：
+    // ✅ 使用者 [101] Alex (角色: Admin)
+    //    Email: alex@example.com
+    //    簡介: Senior Mobile Engineer
+}
+
+// MARK: - 測試案例驗證
+print("--- 測試 1：正常完整資料 ---")
+let validUser = RawUserResponse(
+    id: 101,
+    username: "Alex",
+    email: "alex@example.com",
+    roles: ["Admin", "Developer"],
+    bio: "Senior Mobile Engineer"
+)
+processUserProfile(response: validUser)
+
+print("\n--- 測試 2：邊界缺漏欄位資料 ---")
+let partialUser = RawUserResponse(
+    id: 102,
+    username: "Sam",
+    email: nil,
+    roles: nil,
+    bio: nil
+)
+processUserProfile(response: partialUser)
+
+print("\n--- 測試 3：無效異常資料 ---")
+let invalidUser = RawUserResponse(
+    id: -1,
+    username: "   ",
+    email: nil,
+    roles: nil,
+    bio: nil
+)
+processUserProfile(response: invalidUser)
+```
+
+#### 預期執行結果對照：
+```text
+--- 測試 1：正常完整資料 ---
+✅ 使用者 [101] Alex (角色: Admin)
+   Email: alex@example.com
+   簡介: Senior Mobile Engineer
+
+--- 測試 2：邊界缺漏欄位資料 ---
+✅ 使用者 [102] Sam (角色: Guest)
+   Email: 未提供 Email
+   簡介: 尚未填寫個人簡介
+
+--- 測試 3：無效異常資料 ---
+❌ 驗證失敗：無效的使用者 ID 或名稱
+```
 
 ---
 
 ### 3. 當日交付成果與檢驗指標
-* [ ] 熟練掌握 `guard let` 與 `if let` 的使用邊界。
-* [ ] 能自如處理可空型別的多層解包與字串插值格式化。
+* [ ] 熟練運用 `guard let` 與 `if let` 的使用邊界，體會提早退出（Early Exit）的代碼清晰度。
+* [ ] 理解 `??` 在陣列可空元素（`roles?.first ?? "Guest"`）上的連續解包技巧。
+* [ ] 正確使用 `\()` 進行字串插值與格式化輸出。
 
 ---
 
