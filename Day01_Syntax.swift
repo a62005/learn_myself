@@ -22,13 +22,14 @@ func processUserProfile(response: RawUserResponse) {
     
     // 【任務 3：使用 if let 或空合併處理可空欄位】
     // 規則：處理 email 與 bio，若 bio 為 nil 則顯示 "尚未填寫個人簡介"
-    
+    let newBio = response.bio ??
     
     // 【任務 4：使用字串插值 \( ) 印出格式化結果】
     // 預期輸出格式範例：
     // ✅ 使用者 [101] Alex (角色: Admin)
     //    Email: alex@example.com
     //    簡介: Senior Mobile Engineer
+    
 }
 
 // MARK: - 測試案例
